@@ -8,6 +8,10 @@ Created on Tue Mar 19 15:30:55 2019
 import pandas as pd
 import numpy as np
 
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.metrics import classification_report, accuracy_score
+from sklearn.model_selection import train_test_split
+
 
 #import data into dataframe
 
@@ -15,7 +19,7 @@ df = pd.read_csv('CaseStudyData.csv')
 #-----------------------------------------------------------------------------
 #Task 1.1 KICK proportion
 #-----------------------------------------------------------------------------
-def Kick_proportion():
+def Kick_proportion(df):
     ###count bad buy 0 = No 1 = Yes
     proportion = df['IsBadBuy'].value_counts()
 
@@ -121,14 +125,34 @@ def missing_values(df):
     return df
 
 
-BADBUY = Kick_proportion()
-
+BADBUY = Kick_proportion(df_ready)
 
 processed_data = preprocess_data(df)
 
 df_ready = missing_values(processed_data)
 
+#------------------------------------------------------------------------------
+# DT
+#------------------------------------------------------------------------------
+# change to the dummy
 
+df_ready = pd.get_dummies(df_ready)
 
+feature_names = df.drop('IsBadBuy', axis = 1).columns
+
+y = df_ready['IsBadBuy']
+X = df_ready.drop(['IsBadBuy'], axis = 1)
+
+rs = 101
+X_train, X_test, y_train, y_test = train_test_split(X, y,test_size = 0.3, stratify = y,
+                                                    random_state = rs)
+
+model = DecisionTreeClassifier(random_state=rs)
+model.fit(X_train, y_train)
+
+print("Train accuracy:", model.score(X_train, y_train))
+print("Test accuracy:", model.score(X_test, y_test))
+y_pred = model.predict(X_test)
+print(classification_report(y_test, y_pred))
 
 
