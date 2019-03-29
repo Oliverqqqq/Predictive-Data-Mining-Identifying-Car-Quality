@@ -11,6 +11,7 @@ import numpy as np
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.metrics import classification_report, accuracy_score
 from sklearn.model_selection import train_test_split
+from sklearn.model_selection import GridSearchCV
 
 
 #import data into dataframe
@@ -26,7 +27,7 @@ def Kick_proportion(df):
     kick_proportion = proportion.iloc[1] / len(df)
     
     return kick_proportion
-
+BADBUY = Kick_proportion(df)
 #-----------------------------------------------------------------------------
 #1.2 Fix Data quality problems
 #-----------------------------------------------------------------------------
@@ -92,6 +93,7 @@ def preprocess_data(df):
         mask = df[i] < 100
         df.loc[mask,i] = np.nan
     
+    df['PurchaseDate']
     return df
 
 #------------------------------------------------------------------------------
@@ -121,11 +123,16 @@ def missing_values(df):
     #Irrelevant
     df = df.drop(['PurchaseID','PurchaseTimestamp'], axis = 1)
     
+    # Convert To Date only
+
+    df['PurchaseDate'] = pd.to_datetime(df['PurchaseDate']).dt.strftime('%d/%m')
+
+    
     
     return df
 
 
-BADBUY = Kick_proportion(df_ready)
+
 
 processed_data = preprocess_data(df)
 
@@ -138,12 +145,12 @@ df_ready = missing_values(processed_data)
 
 df_ready = pd.get_dummies(df_ready)
 
-feature_names = df.drop('IsBadBuy', axis = 1).columns
+feature_names = df_ready.drop('IsBadBuy', axis = 1).columns
 
 y = df_ready['IsBadBuy']
 X = df_ready.drop(['IsBadBuy'], axis = 1)
 
-rs = 101
+rs = 10
 X_train, X_test, y_train, y_test = train_test_split(X, y,test_size = 0.3, stratify = y,
                                                     random_state = rs)
 
@@ -155,4 +162,60 @@ print("Test accuracy:", model.score(X_test, y_test))
 y_pred = model.predict(X_test)
 print(classification_report(y_test, y_pred))
 
+##------------------------------------------------------------------------------
+# GIRDSEARCH
+#------------------------------------------------------------------------------
+def GirdSearch():
+    params = {'criterion': ['gini', 'entropy'],
+          'max_features':['auto','sqrt','log2', None],
+          'max_depth': range(2, 6),
+          'min_samples_leaf': range(45, 56)}
 
+    cv = GridSearchCV(param_grid=params, estimator=DecisionTreeClassifier(random_state=rs), cv=10)
+    cv.fit(X_train, y_train)
+    print('strating')
+    print("Train accuracy:", cv.score(X_train, y_train))
+    print("Test accuracy:", cv.score(X_test, y_test))
+
+    # test the best model
+    y_pred = cv.predict(X_test)
+    print(classification_report(y_test, y_pred))
+
+# print parameters of the best model
+    print(cv.best_params_)
+#------------------------------------------------------------------------------
+# Feature Importance
+#------------------------------------------------------------------------------
+
+# grab feature importances from the model and feature name from the original X
+importances = model.feature_importances_
+feature_names = X.columns
+
+# sort them out in descending order
+indices = np.argsort(importances)
+indices = np.flip(indices, axis=0)
+
+# limit to 20 features, you can leave this out to print out everything
+indices = indices[:20]
+
+for i in indices:
+    print(feature_names[i], ':', importances[i])
+    
+    
+    
+    
+    #
+    
+    
+#import seaborn as sns    
+#import matplotlib.pyplot as plt
+#categoryCol = ['PurchaseDate','PurchaseTimestamp']    
+    
+#for i in categoryCol:
+#    sns.countplot(data=df,x=i,hue="IsBadBuy")
+#    plt.show()
+    
+    
+    
+    
+    
