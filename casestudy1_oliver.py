@@ -121,7 +121,7 @@ def missing_values(df):
 #    df = df.drop('IsOnlineSale', axis = 1)
     
     #Irrelevant
-    df = df.drop(['PurchaseID','PurchaseTimestamp'], axis = 1)
+    df = df.drop(['PurchaseID','PurchaseTimestamp','Color','WheelTypeID','Auction','Make','VNST','IsOnlineSale','TopThreeAmericanName'], axis = 1)
     
     # Convert To Date only
 
@@ -168,8 +168,8 @@ print(classification_report(y_test, y_pred))
 def GirdSearch():
     params = {'criterion': ['gini', 'entropy'],
           'max_features':['auto','sqrt','log2', None],
-          'max_depth': range(2, 6),
-          'min_samples_leaf': range(45, 56)}
+          'max_depth': range(2, 7),
+          'min_samples_leaf': range(45,56)}
 
     cv = GridSearchCV(param_grid=params, estimator=DecisionTreeClassifier(random_state=rs), cv=10)
     cv.fit(X_train, y_train)
@@ -183,6 +183,8 @@ def GirdSearch():
 
 # print parameters of the best model
     print(cv.best_params_)
+
+GirdSearch()
 #------------------------------------------------------------------------------
 # Feature Importance
 #------------------------------------------------------------------------------
@@ -205,8 +207,26 @@ for i in indices:
     
     
     #
+#------------------------------------------------------------------------------
+# Visualising relationship between hyperparameters and model performance
+#------------------------------------------------------------------------------
+
+test_score = []
+train_score = []
+
+# check the model performance for max depth from 2-20
+for max_depth in range(2, 20):
+    model = DecisionTreeClassifier(max_depth=max_depth, random_state=rs)
+    model.fit(X_train, y_train)
     
-    
+    test_score.append(model.score(X_test, y_test))
+    train_score.append(model.score(X_train, y_train))    
+
+# plot max depth hyperparameter values vs training and test accuracy score
+plt.plot(range(2, 20), train_score, 'b', range(2,20), test_score, 'r')
+plt.xlabel('max_depth\nBlue = training acc. Red = test acc.')
+plt.ylabel('accuracy')
+plt.show()    
 #import seaborn as sns    
 #import matplotlib.pyplot as plt
 #categoryCol = ['PurchaseDate','PurchaseTimestamp']    
