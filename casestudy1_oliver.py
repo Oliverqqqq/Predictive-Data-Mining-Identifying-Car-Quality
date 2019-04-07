@@ -318,7 +318,7 @@ plt.show()
 # LR
 #------------------------------------------------------------------------------
 
-X_train_log, X_test_log, y_train_log, y_test_log =split_data_for_RF_CNN(df_ready)
+X_train_log, X_test_log, y_train_log, y_test_log = split_data_for_RF_CNN(df_ready)
 model_rfe= LogisticRegression(C = 10, random_state=rs)
 
 # fit it to training data
@@ -331,7 +331,7 @@ print(classification_report(y_test_log, y_pred))
 #------------------------------------------------------------------------------
 #importantce
 # grab feature importances from the model and feature name from the original X
-coef = model_rfe.coef_[0]
+coef = cv_lr.best_estimator_.coef_[0]
 feature_names = X.columns
 
 # sort them out in descending order
@@ -339,7 +339,7 @@ indices = np.argsort(np.absolute(coef))
 indices = np.flip(indices, axis=0)
 
 # limit to 20 features, you can leave this out to print out everything
-indices = indices[:5]
+indices = indices[:100]
 
 for i in indices:
     print(feature_names[i], ':', coef[i])
@@ -347,7 +347,7 @@ for i in indices:
 #------------------------------------------------------------------------------
 # LR GridSearch
 #------------------------------------------------------------------------------
-params = {'C': [pow(10, x) for x in range(-5, 3)]}
+params = {'C': [pow(10, x) for x in range(-8, 0)]}
 
 # use all cores to tune logistic regression with C parameter
 cv_lr = GridSearchCV(param_grid=params, estimator=LogisticRegression(random_state=rs), cv=10, n_jobs=-1)
@@ -380,8 +380,8 @@ cv_rfe = GridSearchCV(param_grid=params, estimator=LogisticRegression(random_sta
 cv_rfe.fit(X_train_sel, y_train_log)
 
 # test the best model
-print("Train accuracy:", cv_rfe.score(X_train_sel, y_train_log))
-print("Test accuracy:", cv_rfe.score(X_test_sel, y_test_log))
+print("LR_RFE Train accuracy:", cv_rfe.score(X_train_sel, y_train_log))
+print("LR_RFE Test accuracy:", cv_rfe.score(X_test_sel, y_test_log))
 
 y_pred = cv_rfe.predict(X_test_sel)
 print(classification_report(y_test, y_pred))
@@ -401,8 +401,8 @@ params = {'C': [pow(10, x) for x in range(-6, 4)]}
 cv_lr_dt = GridSearchCV(param_grid=params, estimator=LogisticRegression(random_state=rs), cv=10, n_jobs=-1)
 cv_lr_dt.fit(X_train_sel_model, y_train_log)
 
-print("Train accuracy:", cv_lr_dt.score(X_train_sel_model, y_train_log))
-print("Test accuracy:", cv_lr_dt.score(X_test_sel_model, y_test_log))
+print("LR DT Train accuracy:", cv_lr_dt.score(X_train_sel_model, y_train_log))
+print("LR DT Test accuracy:", cv_lr_dt.score(X_test_sel_model, y_test_log))
 
 # test the best model
 y_pred = cv_lr_dt.predict(X_test_sel_model)
@@ -410,6 +410,30 @@ print(classification_report(y_test_log, y_pred))
 
 # print parameters of the best model
 print(cv_lr_dt.best_params_)
+
+
+#graph plot
+test_score = []
+train_score = []
+params = [pow(10, x) for x in range(-10, 10)]
+# check the model performance for max depth from 2-20
+for c in params:
+    model1 = LogisticRegression(C= c, random_state=rs)
+    model1.fit(X_train_log, y_train_log)
+    
+    test_score.append(model1.score(X_test_log, y_test_log))
+    train_score.append(model1.score(X_train_log, y_train_log))
+for i in test_score:
+    print(i)
+import matplotlib.pyplot as plt
+
+# plot max depth hyperparameter values vs training and test accuracy score
+plt.plot(params, train_score,
+        'b', params, test_score, 'r')
+plt.xscale('log')
+plt.xlabel('C\nBlue = training acc. Red = test acc.')
+plt.ylabel('accuracy')
+plt.show()
 
 #------------------------------------------------------------------------------
 # MLP 
