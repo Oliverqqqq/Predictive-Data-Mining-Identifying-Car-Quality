@@ -390,7 +390,15 @@ print(classification_report(y_test, y_pred))
 print(cv_rfe.best_params_)
 ##------------------------------------------------------------------------------
 #   DT feature selection
-selectmodel = SelectFromModel(cv_dt.best_estimator_, prefit=True)
+X_train_log, X_test_log, y_train_log, y_test_log = split_data_for_RF_CNN(df_ready)
+params = {'criterion': ['gini', 'entropy'],
+          'max_depth': range(8,10),
+          'min_samples_leaf': range(2,3)}
+
+dt_sel = GridSearchCV(param_grid= params, estimator=DecisionTreeClassifier(random_state=rs), cv=10)
+dt_sel.fit(X_train_log, y_train_log)
+
+selectmodel = SelectFromModel(dt_sel.best_estimator_, prefit=True)
 X_train_sel_model = selectmodel.transform(X_train_log)
 X_test_sel_model = selectmodel.transform(X_test_log)
 
@@ -472,19 +480,22 @@ print(cv_mlp.best_params_)
 
 ##------------------------------------------------------------------------------
 # Feature Selection DT CNN
+
 #--------------------
 
+X_train_log, X_test_log, y_train_log, y_test_log =split_data_for_RF_CNN(df_ready)
+
 params = {'criterion': ['gini', 'entropy'],
-          'max_depth': (9,)
+          'max_depth':range(11,12,2),
           'min_samples_leaf': range(2,3)}
 
-cv_dt_cnn= GridSearchCV(param_grid= params, estimator=DecisionTreeClassifier(random_state=rs), cv=10)
-cv_dt_cnn.fit(X_train_log, y_train_log)
+dt_sel = GridSearchCV(param_grid=params, estimator=DecisionTreeClassifier(random_state=rs), cv=10)
+dt_sel.fit(X_train_log, y_train_log)
 
 
 from sklearn.feature_selection import SelectFromModel
 
-selectmodel = SelectFromModel(cv_dt_cnn.best_estimator_, prefit=True)
+selectmodel = SelectFromModel(dt_sel.best_estimator_, prefit=True)
 X_train_sel_model = selectmodel.transform(X_train_log)
 X_test_sel_model = selectmodel.transform(X_test_log)
 
@@ -493,21 +504,41 @@ print(X_train_sel_model.shape)
 
 
 
-params = {'hidden_layer_sizes': ((95,),(97,),(99,),(101)), 'alpha': [0.01,0.001, 0.0001]}
+params = {'hidden_layer_sizes': (105,) , 'alpha': [0.01,0.001]}
 
-cv_dt_cnn = GridSearchCV(param_grid=params, estimator=MLPClassifier(random_state=rs), cv=10, n_jobs=-1)
-cv_dt_cnn.fit(X_train_sel_model, y_train)
+cv_dt_cnn = GridSearchCV(param_grid=params, estimator=MLPClassifier( random_state=rs), cv=10, n_jobs=-1)
+cv_dt_cnn.fit(X_train_sel_model, y_train_log)
 
 print("Train accuracy:", cv_dt_cnn.score(X_train_sel_model, y_train_log))
 print("Test accuracy:", cv_dt_cnn.score(X_test_sel_model, y_test_log))
 
 y_pred = cv_dt_cnn.predict(X_test_sel_model)
-print(classification_report(y_test, y_pred))
+print(classification_report(y_test_log, y_pred))
 
 print(cv_dt_cnn.best_params_)
 
 ##------------------------------------------------------------------------------
-# Feature Selection
+# Feature Selection RF
+#--------------------
+X_train_sel = rfe.transform(X_train_log)
+X_test_sel = rfe.transform(X_test_log)
+
+params = {'hidden_layer_sizes': [(90,), (92,), (100,), (105,)], 'alpha': [0.0001, 0.00001]}
+
+cv_cnn_rf= GridSearchCV(param_grid=params, estimator=MLPClassifier(random_state=rs), cv=10, n_jobs=-1)
+cv_cnn_rf.fit(X_train_sel, y_train_log)
+
+print("Train accuracy:", cv_cnn_rf.score(X_train_sel, y_train_log))
+print("Test accuracy:", cv_cnn_rf.score(X_test_sel, y_test_log))
+
+y_pred = cv_cnn_rf.predict(X_test_sel)
+print(classification_report(y_test_log, y_pred))
+
+print(cv_cnn_rf.best_params_)
+
+
+##------------------------------------------------------------------------------
+# ensemble model
 #--------------------
 
 dt_model = cv_dt.best_estimator_
@@ -516,7 +547,8 @@ print(dt_model)
 cnn_model = cv_mlp.best_estimator_
 print(cnn_model)
 
-cl_model = cv_lr.best_estimator_
+cl_model = cv_rfe.best_params_
+print(cl_model)
 
 y_pred_dt = dt_model.predict(X_test)
 y_pred_log_reg = cl_model.predict(X_test_log)
@@ -587,3 +619,47 @@ y_pred_proba_ensemble = voting.predict_proba(X_test_log)
 roc_index_ensemble = roc_auc_score(y_test_log, y_pred_proba_ensemble[:, 1])
 print("ROC score of voting classifier:", roc_index_ensemble)
     
+
+
+
+
+#
+# 2 min per cycle
+# fuond in previous DT section: 9, 2
+params = {'criterion': ['gini', 'entropy'],
+          'max_depth':range(9,10),
+          'min_samples_leaf': range(2,3)}
+
+cv_dt = GridSearchCV(param_grid=params, estimator=DecisionTreeClassifier(random_state=rs), cv=10)
+cv_dt.fit(X_train_log, y_train_log)
+
+#instant
+selectmodel = SelectFromModel(cv_dt.best_estimator_, prefit=True)
+X_train_sel_model = selectmodel.transform(X_train_log)
+X_test_sel_model = selectmodel.transform(X_test_log)
+
+print(X_train_sel_model.shape)
+
+
+# 50 mins
+params = {'hidden_layer_sizes': [105], 'alpha': [0.001]}
+
+cv_dt_cnn = GridSearchCV(param_grid=params, estimator=MLPClassifier(max_iter=500, random_state=rs), cv=10, n_jobs=-1)
+cv_dt_cnn.fit(X_train_sel_model, y_train_log)
+
+print("Train accuracy:", cv_dt_cnn.score(X_train_sel_model, y_train_log))
+print("Test accuracy:", cv_dt_cnn.score(X_test_sel_model, y_test_log))
+
+y_pred_dt_cnn = cv_dt_cnn.predict(X_test_sel_model)
+print(classification_report(y_test, y_pred_dt_cnn))
+
+print(cv_dt_cnn.best_params_)
+
+dt_y_pred, dt_model = find_acc_params(rs, X_train_sel_model, y_train, X_test_sel_model, y_test, iter_max=500, A = cv_dt_cnn.best_params_['alpha'], hidden_layer = tuple([cv_dt_cnn.best_params_['hidden_layer_sizes']]))
+find_arch(dt_model)
+dt_model.n_iter_
+
+
+
+
+
