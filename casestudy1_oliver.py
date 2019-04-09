@@ -24,6 +24,7 @@ from collections import Counter
 from imblearn.under_sampling import RandomUnderSampler
 from imblearn.over_sampling import SMOTE
 from sklearn.feature_selection import RFECV
+from sklearn.feature_selection import SelectFromModel
 
 
 
@@ -198,13 +199,9 @@ def analyse_feature_importance(dm_model, feature_names, n_to_display=20):
     for i in indices:
         print(feature_names[i], ':', importances[i])
         
-def split_data_for_RF_CNN(df_ready):
+def split_data_for_RF_CNN(df_ready, num_cols):
     df_log = df_ready.copy()
-    num_cols = ['PurchaseYear','PurchaseMonth','VehYear','VehOdo','MMRAcquisitionAuctionAveragePrice','MMRAcquisitionAuctionCleanPrice',
-            'MMRAcquisitionRetailAveragePrice','MMRAcquisitonRetailCleanPrice',
-            'MMRCurrentAuctionAveragePrice','MMRCurrentAuctionCleanPrice',
-               'MMRCurrentRetailAveragePrice' , 'MMRCurrentRetailCleanPrice',
-               'VehBCost','WarrantyCost']
+
     for col in num_cols:
         df_log[col] = df_log[col].apply(lambda x: x+1)
         df_log[col] = df_log[col].apply(np.log)
@@ -318,7 +315,7 @@ plt.show()
 # LR
 #------------------------------------------------------------------------------
 
-X_train_log, X_test_log, y_train_log, y_test_log = split_data_for_RF_CNN(df_ready)
+X_train_log, X_test_log, y_train_log, y_test_log = split_data_for_RF_CNN(df_ready,num_cols)
 model_rfe= LogisticRegression(C = 10, random_state=rs)
 
 # fit it to training data
@@ -390,9 +387,8 @@ print(classification_report(y_test, y_pred))
 print(cv_rfe.best_params_)
 ##------------------------------------------------------------------------------
 #   DT feature selection
-X_train_log, X_test_log, y_train_log, y_test_log = split_data_for_RF_CNN(df_ready)
 params = {'criterion': ['gini', 'entropy'],
-          'max_depth': range(8,10),
+          'max_depth': range(8,12),
           'min_samples_leaf': range(2,3)}
 
 dt_sel = GridSearchCV(param_grid= params, estimator=DecisionTreeClassifier(random_state=rs), cv=10)
@@ -447,7 +443,7 @@ plt.show()
 # MLP 
 #------------------------------------------------------------------------------
 
-X_train_log, X_test_log, y_train_log, y_test_log =split_data_for_RF_CNN(df_ready)
+X_train_log, X_test_log, y_train_log, y_test_log =split_data_for_RF_CNN(df_ready, num_cols)
 
 mlp = MLPClassifier(random_state=rs)
 mlp.fit(X_train_log, y_train_log)
@@ -483,7 +479,7 @@ print(cv_mlp.best_params_)
 
 #--------------------
 
-X_train_log, X_test_log, y_train_log, y_test_log =split_data_for_RF_CNN(df_ready)
+X_train_log, X_test_log, y_train_log, y_test_log =split_data_for_RF_CNN(df_ready,num_cols)
 
 params = {'criterion': ['gini', 'entropy'],
           'max_depth':range(11,12,2),
@@ -493,7 +489,6 @@ dt_sel = GridSearchCV(param_grid=params, estimator=DecisionTreeClassifier(random
 dt_sel.fit(X_train_log, y_train_log)
 
 
-from sklearn.feature_selection import SelectFromModel
 
 selectmodel = SelectFromModel(dt_sel.best_estimator_, prefit=True)
 X_train_sel_model = selectmodel.transform(X_train_log)
@@ -509,11 +504,11 @@ params = {'hidden_layer_sizes': (105,) , 'alpha': [0.01,0.001]}
 cv_dt_cnn = GridSearchCV(param_grid=params, estimator=MLPClassifier( random_state=rs), cv=10, n_jobs=-1)
 cv_dt_cnn.fit(X_train_sel_model, y_train_log)
 
-print("Train accuracy:", cv_dt_cnn.score(X_train_sel_model, y_train_log))
-print("Test accuracy:", cv_dt_cnn.score(X_test_sel_model, y_test_log))
+print("Train accuracy:", cv_dt_cnn.score(X_train_sel_model, y_train))
+print("Test accuracy:", cv_dt_cnn.score(X_test_sel_model, y_test))
 
 y_pred = cv_dt_cnn.predict(X_test_sel_model)
-print(classification_report(y_test_log, y_pred))
+print(classification_report(y_test, y_pred))
 
 print(cv_dt_cnn.best_params_)
 
@@ -544,29 +539,23 @@ print(cv_cnn_rf.best_params_)
 dt_model = cv_dt.best_estimator_
 print(dt_model)
 
-cnn_model = cv_mlp.best_estimator_
+cnn_model = cv_dt_cnn.best_estimator_
 print(cnn_model)
 
-cl_model = cv_rfe.best_params_
+cl_model = cv_rfe.best_estimator_
 print(cl_model)
 
-y_pred_dt = dt_model.predict(X_test)
-y_pred_log_reg = cl_model.predict(X_test_log)
-y_pred_nn = cnn_model.predict(X_test_log)
 
-print("Accuracy score on test for DT:", accuracy_score(y_test, y_pred_dt))
-print("Accuracy score on test for logistic regression:", accuracy_score(y_test, y_pred_log_reg))
-print("Accuracy score on test for NN:", accuracy_score(y_test, y_pred_nn))
 
 from sklearn.metrics import roc_auc_score
 
 y_pred_proba_dt = dt_model.predict_proba(X_test)
-y_pred_proba_log_reg = cl_model.predict_proba(X_test_log)
-y_pred_proba_nn = cnn_model.predict_proba(X_test_log)
+y_pred_proba_log_reg = cl_model.predict_proba(X_test_sel)
+y_pred_proba_nn = cnn_model.predict_proba(X_test_sel_model)
 
 roc_index_dt = roc_auc_score(y_test, y_pred_proba_dt[:, 1])
-roc_index_log_reg = roc_auc_score(y_test_log, y_pred_proba_log_reg[:, 1])
-roc_index_nn = roc_auc_score(y_test_log, y_pred_proba_nn[:, 1])
+roc_index_log_reg = roc_auc_score(y_test, y_pred_proba_log_reg[:, 1])
+roc_index_nn = roc_auc_score(y_test, y_pred_proba_nn[:, 1])
 
 
 
@@ -581,13 +570,14 @@ from sklearn.metrics import roc_curve
 fpr_dt, tpr_dt, thresholds_dt = roc_curve(y_test, y_pred_proba_dt[:,1])
 fpr_log_reg, tpr_log_reg, thresholds_log_reg = roc_curve(y_test, y_pred_proba_log_reg[:,1])
 fpr_nn, tpr_nn, thresholds_nn = roc_curve(y_test, y_pred_proba_nn[:,1])
+fpr_en, tpr_en,thresholds_en = roc_curve(y_test,y_pred_proba_ensemble[:,1])
 
 import matplotlib.pyplot as plt
 
 plt.plot(fpr_dt, tpr_dt, label='ROC Curve for DT {:.3f}'.format(roc_index_dt), color='red', lw=0.5)
 plt.plot(fpr_log_reg, tpr_log_reg, label='ROC Curve for Log reg {:.3f}'.format(roc_index_log_reg), color='green', lw=0.5)
 plt.plot(fpr_nn, tpr_nn, label='ROC Curve for NN {:.3f}'.format(roc_index_nn), color='darkorange', lw=0.5)
-
+plt.plot(fpr_en, tpr_en, label = 'ROC Curve for ensemble {:.3f}'.format(roc_index_ensemble),color = 'blue',lw = 0.5)
 # plt.plot(fpr[2], tpr[2], color='darkorange',
 #          lw=lw, label='ROC curve (area = %0.2f)' % roc_auc[2])
 plt.plot([0, 1], [0, 1], color='navy', lw=0.5, linestyle='--')
@@ -609,7 +599,7 @@ from sklearn.ensemble import VotingClassifier
 voting = VotingClassifier(estimators=[('dt', dt_model), ('lr', cl_model), ('nn', cnn_model)], voting='soft')
 
 voting.fit(X_train_log, y_train_log)
-
+y_pred_ensemble = voting.predict(X_test_log)
 # evaluate train and test accuracy
 print("Ensemble train accuracy:", voting.score(X_train_log, y_train_log))
 print("Ensemble test accuracy:", voting.score(X_test_log, y_test_log))
@@ -620,46 +610,9 @@ roc_index_ensemble = roc_auc_score(y_test_log, y_pred_proba_ensemble[:, 1])
 print("ROC score of voting classifier:", roc_index_ensemble)
     
 
+print(classification_report(y_test, y_pred_proba_ensemble))
 
 
 
-#
-# 2 min per cycle
-# fuond in previous DT section: 9, 2
-params = {'criterion': ['gini', 'entropy'],
-          'max_depth':range(9,10),
-          'min_samples_leaf': range(2,3)}
-
-cv_dt = GridSearchCV(param_grid=params, estimator=DecisionTreeClassifier(random_state=rs), cv=10)
-cv_dt.fit(X_train_log, y_train_log)
-
-#instant
-selectmodel = SelectFromModel(cv_dt.best_estimator_, prefit=True)
-X_train_sel_model = selectmodel.transform(X_train_log)
-X_test_sel_model = selectmodel.transform(X_test_log)
-
-print(X_train_sel_model.shape)
-
-
-# 50 mins
-params = {'hidden_layer_sizes': [105], 'alpha': [0.001]}
-
-cv_dt_cnn = GridSearchCV(param_grid=params, estimator=MLPClassifier(max_iter=500, random_state=rs), cv=10, n_jobs=-1)
-cv_dt_cnn.fit(X_train_sel_model, y_train_log)
-
-print("Train accuracy:", cv_dt_cnn.score(X_train_sel_model, y_train_log))
-print("Test accuracy:", cv_dt_cnn.score(X_test_sel_model, y_test_log))
-
-y_pred_dt_cnn = cv_dt_cnn.predict(X_test_sel_model)
-print(classification_report(y_test, y_pred_dt_cnn))
-
-print(cv_dt_cnn.best_params_)
-
-dt_y_pred, dt_model = find_acc_params(rs, X_train_sel_model, y_train, X_test_sel_model, y_test, iter_max=500, A = cv_dt_cnn.best_params_['alpha'], hidden_layer = tuple([cv_dt_cnn.best_params_['hidden_layer_sizes']]))
-find_arch(dt_model)
-dt_model.n_iter_
-
-
-
-
+print("\nReport for Ensemble: \n",classification_report(y_test_log, y_pred_ensemble))
 
